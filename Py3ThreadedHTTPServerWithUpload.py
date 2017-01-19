@@ -14,9 +14,8 @@ you trust.
 """
  
 __version__ = "1.0"
-#__all__ = ["SimpleHTTPRequestHandler"]
-__me__ = "Py3HTTPServerWithUpload"
-__home_page__ = "https://github.com/romeojulietthotel"
+__me__ = "Py3ThreadedHTTPServerWithUpload"
+__home_page__ = "https://github.com/romeojulietthotel/Py3ThreadedHTTPServerWithUpload"
 
 port = 8000
 
@@ -297,11 +296,11 @@ def myrequest(server):
     # Start a thread with the server -- that thread will then start one
     # more thread for each request
     server_thread = threading.Thread(target=server.serve_forever)
+
     # Exit the server thread when the main thread terminates
     server_thread.daemon = True
     server_thread.start()
-    #print("Request from ", server.client_address[0], " handled by ", server_thread.name)
-
+    print("Request handled by ", server_thread.name)
     server.handle_request()
 
 if __name__ == '__main__':
