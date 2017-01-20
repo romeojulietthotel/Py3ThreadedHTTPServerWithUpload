@@ -82,8 +82,8 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         msg += "<br><a href=\"%s\">back</a>" % self.headers['referer']
         msg += "<hr><small>Python powered"
 
-        msg += "<a href=\"%s/%s\" targe=\"_blank\">" % __home_page__ + __me__
-        msg += " Py3HTTPServerWithUpload</a>.</small></body>\n</html>\n"
+        msg += "<a href=\"%s/%s\" targe=\"_blank\">" % (__home_page__,__me__)
+        msg += __me__ + "</a>.</small></body>\n</html>\n"
         f.write(msg.encode())
         length = f.tell()
         f.seek(0)
