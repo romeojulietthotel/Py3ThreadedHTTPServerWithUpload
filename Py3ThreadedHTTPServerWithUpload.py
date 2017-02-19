@@ -161,7 +161,7 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                 return None
 
             index = os.path.join(path, 'index.html')
-            if os.path.exists(index):
+            if os.path.exists(index) and os.stat(index)[6] > min_index_sz:
                 path = index
             else:
                 return self.list_directory(path)
@@ -189,11 +189,11 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 
         """
         try:
-            list = os.listdir(path)
+            mylist = os.listdir(path)
+            mylist.sort(key=lambda x: os.stat(os.path.join(path, x)).st_ctime, reverse=True)
         except os.error:
             self.send_error(404, "No permission to list directory: %s" % path)
             return None
-        list.sort(key=lambda a: a.lower())
         f = BytesIO()
         displaypath = cgi.escape(urllib.parse.unquote(self.path))
         msg = '<!DOCTYPE html>'
@@ -204,7 +204,7 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         msg += "<input name=\"file\" type=\"file\"/>"
         msg += "<input type=\"submit\" value=\"upload\"/></form>\n<hr>\n<ol>\n"
         f.write(msg.encode())
-        for name in list:
+        for name in mylist:
             if re.match(r'^\.', name):
                 continue
             fullname = os.path.join(path, name)
@@ -304,6 +304,7 @@ def myrequest(server):
     server.handle_request()
 
 if __name__ == '__main__':
+    min_index_sz = 20
     server = ThreadingSimpleServer(('', port), SimpleHTTPRequestHandler)
     print("Starting and listening on port %d" % port)
     timestamp = "{0}".format(time.strftime('%Y/%m/%dT%H:%M:%S', time.localtime()))
