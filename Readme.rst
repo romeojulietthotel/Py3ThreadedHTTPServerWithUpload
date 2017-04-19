@@ -1,4 +1,5 @@
-Multi-threaded http download/upload server.
+|Multi-threaded http download/upload server.|
+=============================================
 
 BaseHTTPServer that implements the standard GET and HEAD requests.
 
