@@ -326,7 +326,7 @@ def myrequest(server):
         server_thread.daemon = True
         server_thread.start()
     except:
-        raise Exception("Something broke.")
+        print("Exiting now.")
     print("Request handled by ", server_thread.name)
     try:
         server.handle_request()
