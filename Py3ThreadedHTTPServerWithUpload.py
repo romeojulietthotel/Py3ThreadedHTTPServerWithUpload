@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
- 
+
 """
 
 Multi-threaded http download/upload server.
@@ -13,32 +13,34 @@ you trust.
 
 """
  
-__version__ = "1.0"
+__version__ = "1.1"
 __me__ = "Py3ThreadedHTTPServerWithUpload"
 __home_page__ = "https://github.com/romeojulietthotel/Py3ThreadedHTTPServerWithUpload"
 
 port = 8000
 
-from io import BytesIO
-from socketserver import ThreadingMixIn
-
 import cgi
+import datetime
 import http.server
 import mimetypes
 import os
 import posixpath
 import re
-import shutil
 import threading
 import time
 import urllib.request, urllib.parse, urllib.error
 
 
-class ThreadingSimpleServer(ThreadingMixIn, http.server.HTTPServer):
+from io import BytesIO
+from shutil import copyfileobj
+from socketserver import ForkingMixIn
+
+
+class ThreadingSimpleServer(ForkingMixIn, http.server.HTTPServer):
     pass
- 
+
 class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
- 
+
     """
     Request handler with GET/HEAD/POST commands.
 
@@ -56,7 +58,10 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         print("Client: ", self.client_address[0])
         f = self.send_head()
         if f:
-            self.copyfile(f, self.wfile)
+            try:
+                self.copyfile(f, self.wfile)
+            except:
+                raise Exception("Error during copyfile.")
             f.close()
  
     def do_HEAD(self):
@@ -88,7 +93,7 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         length = f.tell()
         f.seek(0)
         self.send_response(200)
-        self.send_header("Content-type", "text/html")
+        self.send_header("Content-Type", "text/html; charset=UTF-8")
         self.send_header("Content-Length", str(length))
         self.end_headers()
         if f:
@@ -121,7 +126,7 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             out = open(fn, 'wb')
         except IOError:
             return (False, " Unable to create file %s." % fn)
-                
+
         preline = self.rfile.readline()
         remainder -= len(preline)
         while remainder > 0:
@@ -173,7 +178,7 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             self.send_error(404, msg)
             return None
         self.send_response(200)
-        self.send_header("Content-type", ctype)
+        self.send_header("Content-Type", ctype)
         fs = os.fstat(f.fileno())
         self.send_header("Content-Length", str(fs[6]))
         self.send_header("Last-Modified", self.date_time_string(fs.st_mtime))
@@ -191,8 +196,13 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         try:
             mylist = os.listdir(path)
             mylist.sort(key=lambda x: os.stat(os.path.join(path, x)).st_ctime, reverse=True)
+            fullist = dict()
+            for f in mylist:
+                fstat = os.stat(os.path.join(path,f))
+                hr_time = mod_date(fstat.st_mtime)
+                fullist[f] = (hr_time,fstat.st_size)
         except os.error:
-            self.send_error(404, "No permission to list directory: %s" % path)
+            self.send_error(404, "You have no permission to list: %s" % path)
             return None
         f = BytesIO()
         displaypath = cgi.escape(urllib.parse.unquote(self.path))
@@ -203,6 +213,8 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         msg += "<form ENCTYPE=\"multipart/form-data\" method=\"post\">"
         msg += "<input name=\"file\" type=\"file\"/>"
         msg += "<input type=\"submit\" value=\"upload\"/></form>\n<hr>\n<ol>\n"
+        msg += "<table><thead>%s" % displaypath
+        msg += "<tr><th>file/dir<th>date/time<th>size(bytes)<tbody>"
         f.write(msg.encode())
         for name in mylist:
             if re.match(r'^\.', name):
@@ -213,16 +225,18 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                 displayname = name + "/"
                 linkname = name + "/"
             if os.path.islink(fullname):
+                # symlink to dir displays with @ links with /
                 displayname = name + "@"
-                # Note: a link to a directory displays with @ and links with /
-            msg = '<li><a href="%s" target="_blank">%s</a>\n'
-            msg = msg % (urllib.parse.quote(linkname), cgi.escape(displayname))
+            msg = '<tr><td><a href="%s" target="_blank">%s</a><td>%s<td>   %d  \n'
+            msg = msg % (urllib.parse.quote(linkname),
+                         cgi.escape(displayname),
+                        fullist[name][0], fullist[name][1])
             f.write(msg.encode())
-        f.write(b"</ol>\n<hr>\n</body>\n</html>\n")
+        f.write(b"</table>\n<hr>\n</body>\n</html>\n")
         length = f.tell()
         f.seek(0)
         self.send_response(200)
-        self.send_header("Content-type", "text/html")
+        self.send_header("Content-Type", "text/html; charset=UTF-8")
         self.send_header("Content-Length", str(length))
         self.end_headers()
         return f
@@ -256,7 +270,10 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         argument is a file object open for writing.
 
         """
-        shutil.copyfileobj(source, dest)
+        try:
+            copyfileobj(source, dest)
+        except BrokenPipeError:
+            print("Unexpected client close.")
  
     def guess_type(self, path):
         """
@@ -265,7 +282,7 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         Argument is a path to a file).
 
         Return value is a string of type/subtype and used for a MIME
-        Content-type header.
+        Content-Type header.
 
         Look for file's extension in the table self.extensions_map
         Use application/octet-stream as the default.
@@ -290,26 +307,45 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                            '.c': 'text/plain',
                            '.h': 'text/plain',
                           })
- 
- 
+
+def mod_date(file_mtime):
+    return datetime.datetime.fromtimestamp(file_mtime).strftime('%Y-%m-%d/%H:%M:%S')
+
 def myrequest(server):
-    # Start a thread with the server -- that thread will then start one
-    # more thread for each request
+    """
+    Start a thread with the server -- that thread will then fork
+    for each request. The forking model is cleaner with regards
+    to memory use. Some memory growth was observed using the
+    ThreadingMixin and the ForkingMixin does not show that memory
+    use.
+    """
     server_thread = threading.Thread(target=server.serve_forever)
 
     # Exit the server thread when the main thread terminates
-    server_thread.daemon = True
-    server_thread.start()
+    try:
+        server_thread.daemon = True
+        server_thread.start()
+    except:
+        raise Exception("Something broke.")
     print("Request handled by ", server_thread.name)
-    server.handle_request()
+    try:
+        server.handle_request()
+    except:
+        raise Exception("Something unexpected happened.")
+
 
 if __name__ == '__main__':
     min_index_sz = 20
-    server = ThreadingSimpleServer(('', port), SimpleHTTPRequestHandler)
+    try:
+        server = ThreadingSimpleServer(('', port), SimpleHTTPRequestHandler)
+    except:
+        raise Exception("Error at ignition.")
     print("Starting and listening on port %d" % port)
     timestamp = "{0}".format(time.strftime('%Y/%m/%dT%H:%M:%S', time.localtime()))
     print("Date/Time: %s" % timestamp)
 
     while True:
-        myrequest(server)
-        
+        try:
+            myrequest(server)
+        except:
+            raise Exception("Error encountered.")
