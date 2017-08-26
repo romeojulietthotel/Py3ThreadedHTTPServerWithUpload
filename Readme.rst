@@ -10,13 +10,30 @@ you trust.
 It works but it's not perfect. But good enough.
 
 
+Features:
+---------
+
+* Forks for each new request
+* Can handle multiple requests simultaneously
+* Allows file uploads overwriting existing files
+* Display directories and files with sizes and date/time
+* Serves a favicon no matter what directory it runs from
+  just supply the icon and point to it with faviconpath
+* Has no dependencies except Python3
+
+
+Portability:
+------------
+
+* Runs fine on linux, should run fine on macosx, fork is not supported
+  on windows.
+
+
 
 TODO:
 -----
 
 - On file upload don't overwrite an existing file, sometimes you want to overwrite an existing file,.e.g. An index.html file that prevents seeing a directory's contents. Maybe allow some to be overwritten and deny all others; an overwrite whitelist.
-
-- Seek out the anwser to whether or not ForkingMixin is portable to Windows systems.
 
 - Add more styling to the filename and filesize output so it's easier to read.
 

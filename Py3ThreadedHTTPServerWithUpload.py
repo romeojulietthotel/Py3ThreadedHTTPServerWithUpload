@@ -55,7 +55,6 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
  
     def do_GET(self):
         """Serve a GET request."""
-        print("Client: ", self.client_address[0])
         f = self.send_head()
         if f:
             try:
@@ -172,6 +171,10 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                 return self.list_directory(path)
         ctype = self.guess_type(path)
         try:
+            favicon = faviconrx.search(path)
+            if favicon:
+                print("favicon request")
+                path = faviconpath
             f = open(path, 'rb')
         except IOError:
             msg = "File %s not found" % path
@@ -311,7 +314,7 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 def mod_date(file_mtime):
     return datetime.datetime.fromtimestamp(file_mtime).strftime('%Y-%m-%d/%H:%M:%S')
 
-def myrequest(server):
+def myrequest(myserver):
     """
     Start a thread with the server -- that thread will then fork
     for each request. The forking model is cleaner with regards
@@ -319,22 +322,26 @@ def myrequest(server):
     ThreadingMixin and the ForkingMixin does not show that memory
     use.
     """
-    server_thread = threading.Thread(target=server.serve_forever)
+    
+    server_thread = threading.Thread(target=myserver.serve_forever())
 
-    # Exit the server thread when the main thread terminates
     try:
         server_thread.daemon = True
         server_thread.start()
+        server_thread.join(timeout=180)
     except:
-        print("Exiting now.")
-    print("Request handled by ", server_thread.name)
+        print("Exiting.")
     try:
-        server.handle_request()
+        myserver.handle_request()
+    except KeyboardInterrupt:
+        exit()
     except:
         raise Exception("Something unexpected happened.")
 
 
 if __name__ == '__main__':
+    faviconpath = '/var/tmp/favicon.ico'
+    faviconrx = re.compile(r'[^/]?/favicon.ico$', re.I)
     min_index_sz = 20
     try:
         server = ThreadingSimpleServer(('', port), SimpleHTTPRequestHandler)
@@ -343,9 +350,8 @@ if __name__ == '__main__':
     print("Starting and listening on port %d" % port)
     timestamp = "{0}".format(time.strftime('%Y/%m/%dT%H:%M:%S', time.localtime()))
     print("Date/Time: %s" % timestamp)
-
+    
     while True:
-        try:
-            myrequest(server)
-        except:
-            raise Exception("Error encountered.")
+        myrequest(server)
+
+    print("Exiting.")
