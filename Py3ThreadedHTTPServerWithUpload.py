@@ -210,6 +210,7 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         f = BytesIO()
         displaypath = cgi.escape(urllib.parse.unquote(self.path))
         msg = '<!DOCTYPE html>'
+        msg += getstyle()
         msg += "<html>\n<title>Directory listing for %s</title>\n" % displaypath
         msg += "<body>\n<h2>Directory listing for %s</h2>\n" % displaypath
         msg += "<hr>\n"
@@ -217,7 +218,9 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         msg += "<input name=\"file\" type=\"file\"/>"
         msg += "<input type=\"submit\" value=\"upload\"/></form>\n<hr>\n<ol>\n"
         msg += "<table><thead>%s" % displaypath
-        msg += "<tr><th>file/dir<th>date/time<th>size(bytes)<tbody>"
+        msg += '<tr><th class="filename">File/Dir'
+        msg += '<th class="timestamp">Date/Time'
+        msg += '<th class="filesize">Size(bytes)<tbody>'
         f.write(msg.encode())
         for name in mylist:
             if re.match(r'^\.', name):
@@ -230,7 +233,9 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             if os.path.islink(fullname):
                 # symlink to dir displays with @ links with /
                 displayname = name + "@"
-            msg = '<tr><td><a href="%s" target="_blank">%s</a><td>%s<td>   %d  \n'
+            msg = '<tr><td class="filesize">'
+            msg += '<a href="%s" target="_blank">%s</a>'
+            msg += '<td class="timestamp">%s<td class="filesize">   %d  \n'
             msg = msg % (urllib.parse.quote(linkname),
                          cgi.escape(displayname),
                         fullist[name][0], fullist[name][1])
@@ -310,6 +315,33 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                            '.c': 'text/plain',
                            '.h': 'text/plain',
                           })
+
+def getstyle():
+    head = '<head><style type="text/css">'
+    head += '''.filesize{
+                 font-family: "Lucida Sans Unicode", "Lucida Grande", sans-serif;
+                 font-size: 1.2em;
+                 text-shadow: 2px 2px 2px #0f49d4;
+             }
+             .timestamp{                 
+                 font-family: "Lucida Sans Unicode", "Lucida Grande", sans-serif;
+                 font-size: 1.0em;
+                 color: #bd6004;
+                 text-shadow: 2px 2px 2px #e48e14;
+             }
+             .filename{
+                 font-family: "Lucida Sans Unicode", "Lucida Grande", sans-serif;
+                 font-size: 1.4em;
+                 color: #340ef4;
+                 text-shadow: 2px 2px 2px #9d8eea;
+             }
+             a:link    {text-decoration:none;}
+             a:hover   {text-decoration:underline;}
+             a:active  {text-decoration:underline;}
+             a:visited {text-decoration:none;}
+             </style></head>'''
+    return head
+
 
 def mod_date(file_mtime):
     return datetime.datetime.fromtimestamp(file_mtime).strftime('%Y-%m-%d/%H:%M:%S')
