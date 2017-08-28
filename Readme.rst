@@ -22,6 +22,7 @@ Features:
 * Has no dependencies except Python3
 
 Here's what a directory listing looks like:
+
 .. image:: Py3ThreadedHTTPServerWithUpload.jpg
 
 
