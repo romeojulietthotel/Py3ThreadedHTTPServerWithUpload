@@ -21,6 +21,9 @@ Features:
   just supply the icon and point to it with faviconpath
 * Has no dependencies except Python3
 
+Here's what a directory listing looks like:
+.. image:: Py3ThreadedHTTPServerWithUpload.jpg
+
 
 Portability:
 ------------
@@ -35,5 +38,4 @@ TODO:
 
 - On file upload don't overwrite an existing file, sometimes you want to overwrite an existing file,.e.g. An index.html file that prevents seeing a directory's contents. Maybe allow some to be overwritten and deny all others; an overwrite whitelist.
 
-- Add more styling to the filename and filesize output so it's easier to read.
 
