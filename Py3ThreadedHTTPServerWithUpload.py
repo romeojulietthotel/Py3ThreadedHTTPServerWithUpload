@@ -13,11 +13,10 @@ you trust.
 
 """
  
-__version__ = "1.1"
+__version__ = "1.3"
 __me__ = "Py3ThreadedHTTPServerWithUpload"
 __home_page__ = "https://github.com/romeojulietthotel/Py3ThreadedHTTPServerWithUpload"
 
-port = 8000
 
 import cgi
 import datetime
@@ -26,6 +25,8 @@ import mimetypes
 import os
 import posixpath
 import re
+import ssl
+import sys
 import threading
 import time
 import urllib.request, urllib.parse, urllib.error
@@ -56,6 +57,9 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         """Serve a GET request."""
         f = self.send_head()
+        hkeys = self.headers.keys()
+        for k in hkeys:
+            print("{}: {}".format(k,self.headers.get(k)))
         if f:
             try:
                 self.copyfile(f, self.wfile)
@@ -102,13 +106,13 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
     def deal_post_data(self):
         content_type = self.headers['content-type']
         if not content_type:
-            return (False, "Content-Type header doesn't contain boundary")
+            return (False, "Content-Type header missing boundary")
         boundary = content_type.split("=")[1].encode()
         remainder = int(self.headers['content-length'])
         line = self.rfile.readline()
         remainder -= len(line)
         if not boundary in line:
-            return (False, "Content NOT begin with boundary")
+            return (False, "Content missing boundary")
         line = self.rfile.readline()
         remainder -= len(line)
         lined = line.decode()
@@ -196,16 +200,25 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         Headers are sent like send_head().
 
         """
+        danglers = list()
+        fullist = dict()
+        mylist = dict()
+        
         try:
             mylist = os.listdir(path)
+            for f in range(0,len(mylist)):
+                if not os.path.exists(os.path.join(path,mylist[f])):
+                    danglers.append(f)
+                for f in sorted(danglers, reverse=True):
+                    del mylist[f]
+
             mylist.sort(key=lambda x: os.stat(os.path.join(path, x)).st_ctime, reverse=True)
-            fullist = dict()
             for f in mylist:
                 fstat = os.stat(os.path.join(path,f))
                 hr_time = mod_date(fstat.st_mtime)
                 fullist[f] = (hr_time,fstat.st_size)
         except os.error:
-            self.send_error(404, "You have no permission to list: %s" % path)
+            self.send_error(404, "You have no permission to list: %s see %d" % path, os.error.errno)
             return None
         f = BytesIO()
         displaypath = cgi.escape(urllib.parse.unquote(self.path))
@@ -306,7 +319,7 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         return self.extensions_map['']
  
     if not mimetypes.inited:
-         # read system mime.types
+         # reads system mime.types
         mimetypes.init()
     extensions_map = mimetypes.types_map.copy()
     extensions_map.update(
@@ -314,7 +327,55 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                            '.py': 'text/plain',
                            '.c': 'text/plain',
                            '.h': 'text/plain',
+                           '.txt': 'text/plain'
                           })
+
+def getcfg():
+    nvars = 0
+    myvars = dict()
+
+    file = os.path.join(os.path.dirname(sys.argv[0]),'pyserv.cfg')
+    if sys.argv:
+        for i in range(1,len(sys.argv)):
+            if sys.argv[i] == '-c':
+                file = sys.argv[i+1]
+    elif not os.path.isfile(file):
+        print("Unable to open file ", file)
+        print("Re-run {} using the -c /path/to/config/file option".format(sys.argv[0]))
+        sys.exit(12)
+
+    try:
+        cfg = open(file, 'r')
+    except:
+        print("Unable to open {}".format(file))
+        sys.exit(1)
+
+    for l in cfg:
+        """ comment chars allowed and skip blank lines """
+        if re.match(r'^\s*#', l) \
+        or re.match(r'^\s*$', l) \
+        or re.match(r'^\s*!', l) \
+        or re.match(r'^\s*%', l):
+            continue
+        keyval = re.findall(r'^\s*([^\s=]+)\s*=\s*([\S]+)$', l)
+        if keyval:
+            nvars += 1
+            key = keyval[0][0].lower()
+            val = keyval[0][1]
+            if re.match(r'env\d+', key):
+                keyval = re.findall(r'^([^\s=]+)\s*=\s*([\S]+)', val)
+                key = keyval[0][0]
+                val = keyval[0][1]
+                myvars[key] = val
+            else:
+                myvars[key] = val.lower()
+    cfg.close()
+    if nvars:
+        return myvars
+    else:
+        print("No config file found, exiting.")
+        sys.exit(1)
+
 
 def getstyle():
     head = '<head><style type="text/css">'
@@ -346,6 +407,7 @@ def getstyle():
 def mod_date(file_mtime):
     return datetime.datetime.fromtimestamp(file_mtime).strftime('%Y-%m-%d/%H:%M:%S')
 
+
 def myrequest(myserver):
     """
     Start a thread with the server -- that thread will then fork
@@ -365,6 +427,9 @@ def myrequest(myserver):
         print("Exiting.")
     try:
         myserver.handle_request()
+        print("What the ?")
+        for k,v in myserver.headers():
+            print("{}: {}".format(k,v))
     except KeyboardInterrupt:
         exit()
     except:
@@ -372,14 +437,31 @@ def myrequest(myserver):
 
 
 if __name__ == '__main__':
-    faviconpath = '/var/tmp/favicon.ico'
+    myvars = getcfg()
+    mydir = os.path.dirname(sys.argv[0])
+    certfile = str(os.path.join(mydir,myvars['certfile']))
+    keyfile = str(os.path.join(mydir,myvars['keyfile']))
+    if not os.path.isfile(certfile) or not os.path.isfile(keyfile):
+        print("Missing cert/key file, exiting.")
+        sys.exit(1)
+    ip = myvars['ipaddress']
+    port = int(myvars['port'])
+    faviconpath = myvars['faviconpath']
     faviconrx = re.compile(r'[^/]?/favicon.ico$', re.I)
+    """ 20 bytes minimum size or do not use index.html """
     min_index_sz = 20
     try:
-        server = ThreadingSimpleServer(('', port), SimpleHTTPRequestHandler)
+        server = ThreadingSimpleServer((ip, port), SimpleHTTPRequestHandler)
+        if server:
+            server.socket = ssl.wrap_socket(server.socket, 
+                certfile=certfile,
+                keyfile=keyfile,
+                ssl_version=ssl.PROTOCOL_TLSv1_2,
+                server_side=True,
+                do_handshake_on_connect=False)
     except:
         raise Exception("Error at ignition.")
-    print("Starting and listening on port %d" % port)
+    print("Starting and listening on host {} port {}".format(ip,port))
     timestamp = "{0}".format(time.strftime('%Y/%m/%dT%H:%M:%S', time.localtime()))
     print("Date/Time: %s" % timestamp)
     

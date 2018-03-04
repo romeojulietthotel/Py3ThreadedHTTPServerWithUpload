@@ -1,0 +1,7 @@
+
+
+certfile = server-cert.pem
+keyfile = server-key.pem
+ipaddress = 192.168.1.234
+port = 18000
+faviconpath = /var/tmp/favicon.ico
