@@ -209,8 +209,8 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             for f in range(0,len(mylist)):
                 if not os.path.exists(os.path.join(path,mylist[f])):
                     danglers.append(f)
-                for f in sorted(danglers, reverse=True):
-                    del mylist[f]
+            for f in sorted(danglers, reverse=True):
+                del mylist[f]
 
             mylist.sort(key=lambda x: os.stat(os.path.join(path, x)).st_ctime, reverse=True)
             for f in mylist:
